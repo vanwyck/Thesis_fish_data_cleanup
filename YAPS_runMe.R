@@ -40,6 +40,19 @@ for (ID in IDS){
         output$synced_time <- DATETIME
         YAPS_data <- rbind(YAPS_data,output)
       })
+      if (is.null(output) && length(ss)>100){
+        output_split <- NULL
+        track_splits = length(ss)/100
+        indices = round(seq(0,length(ss),length=track_splits+1))
+        for (j in 1:length(track_splits)){
+          try({
+            toa_split = toa[indices[j]: indices[j+1]]
+            ss_split =  ss[indices[j]: indices[j+1]]
+            output_split =  runYAPS_bi(hydro_data,toa_split,ss_split,mean_BI,max_it = 500000)
+            YAPS_data <- rbind(YAPS_data.output_split)
+          })
+        }
+      }
     }
   }
   
