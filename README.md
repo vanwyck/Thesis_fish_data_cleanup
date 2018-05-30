@@ -1,6 +1,6 @@
 # Thesis_fish_data_cleanup
 
-**Run Cleanup_notebook for all results and explenation**
+**Run Cleanup_notebook for all results and explanation**
 
 This repository provides all code for the implementation of the YAPS-BI algorithm, combined with a Kalman filter/smoother.
 
