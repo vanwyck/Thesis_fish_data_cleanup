@@ -1,4 +1,7 @@
 # Thesis_fish_data_cleanup
+
+**Run Cleanup_notebook for all results and explenation**
+
 This repository provides all code for the implementation of the YAPS-BI algorithm, combined with a Kalman filter/smoother.
 
 The method implemented here uses an altered version of the YAPS algorithm created by Baktoft (2017). 
