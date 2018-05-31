@@ -21,7 +21,6 @@ Contains functions:
     - to_reference_coord
     - two_stage_speed_filter
 
-
 @author: Thoma
 """
 
@@ -34,18 +33,20 @@ import matplotlib.pyplot as plt
 def angle_filter(data, max_angle = 165,xcolname = 'X',ycolname = 'Y'):
     '''
     This function will remove positions with unrealisticly high speeds as a form of validation gating before the Kalman Filter.
-    The method used is analogous to the one defined by McConnel in 1992
+    The method used is analogous to the one defined by Freitas et al (2008).
+    It is used as the final step in the three stage filter
     
     Inputs
     ------
-    data : dataframe 
+    data : DataFrame 
         The dataset that requires cleaning. Must contain at least the columns 'X','Y' and 'DATETIME'
     max_angle : int, optional
         Maximum turning angle expected to come from actual fish positions, expressed in degrees
     
     Returns
     -------
-    cleaned_data : dataframe
+    cleaned_data : DataFrame
+        The cleaned dataset, with unrealistic turning angles removed
     '''
     #calculate distance between steps
     dist=np.sqrt((data[xcolname]-data[xcolname].shift(1))**2+(data[ycolname]-data[ycolname].shift(1))**2)
@@ -63,7 +64,7 @@ def calculate_max_time(input_data,hydro,all_temp_data,tollerance =0.01,S = 0.4,z
     
     Parameters
     ----------
-    input_data: DataFrame
+    input_data : DataFrame
         The raw synchronised data of one selected tag
     hydro : DataFrame
         The positions of the receivers
@@ -133,6 +134,25 @@ def clean_toa_data(end_data,min_delay):
     return end_data_cleaned
 
 def CTCRW(m_k_old, P_k_old,delta_t,beta, sigma):
+    '''
+    Implementation of the CTCRW model as defined by Johnson et al (2008), but using the notation of Sarkka (2013)
+    
+    Parameters
+    ----------
+    m_k_old : numpy array
+        Vector that contains the last filtered state
+    P_k_old : numpy array
+        Covariance matrix of the last filtered position
+    delta_t : float
+        Time between the last and current detection, in seconds
+    beta : float
+        Known or estimated parameter of the model
+    sigma : float
+        Known or estimated parameter of the model
+    Returns
+    -------
+    
+    '''
     A_k = np.eye(4)
     A_k[(0,1),(2,3)] = (1-np.exp(-beta*delta_t))/beta
     A_k[(2,3),(2,3)] = np.exp(-beta*delta_t)
@@ -148,6 +168,21 @@ def CTCRW(m_k_old, P_k_old,delta_t,beta, sigma):
     return m_k_hat,P_k_hat
 
 def find_delay(ID):
+    '''
+    Returns the known burst interval limits of a transmitter
+    
+    Parameters
+    ----------
+    ID : string
+        ID of the transmitter in question
+    
+    Returns
+    -------
+    min_delay : float
+        Smallest possible time interval between transmissions (in seconds)
+    max_delay : float
+        Largest possible time interval between transmissions (in seconds)
+    '''
     ID = np.int(ID)
     if ((ID >= 100) & (ID <= 109)| (ID == 255)):
         min_delay = 17 + 3.6
@@ -169,6 +204,23 @@ def find_delay(ID):
     return (min_delay,max_delay)
 
 def iterate_over_passings(VPS_data_fish,beta,sigma,xcolname = 'X', ycolname = 'Y', tcolname = 'DATETIME',errorcol = 'HPE'):
+    '''
+    Iterates the KF and RTSS over all tracks present in the input data 
+    
+    Parameters
+    ----------
+    VPS_data_fish : DataFrame
+        Input data that needs to be smoothed out
+    beta, sigma : float
+        Parameters for the CTCRW model
+    xcolname, ycolname, tcolname, tcolname : string
+        Names of the colums containing the horizontal position, verticle position, time (as a DateTime) or error sensitivity respectfully
+    
+    Returns
+    -------
+    data_out : DataFrame
+        Cleaned track, containing the same columns as the input and the filtered and smoothed positions and error sensitivities
+    '''
     data_out = pd.DataFrame()
     for i in VPS_data_fish.pas_nr.unique():
         track = VPS_data_fish[VPS_data_fish.pas_nr == i].reset_index(drop = True)
@@ -180,6 +232,29 @@ def iterate_over_passings(VPS_data_fish,beta,sigma,xcolname = 'X', ycolname = 'Y
     return data_out
 
 def KalmanFilter(m_k_hat, P_k_hat, H, y_k, R_k):
+    '''
+    Implementation of the standard Kalman Filter, using the notation of Sakkra (2013)
+    
+    Parameters
+    ----------
+    m_k_hat : array
+        Predicted current state
+    P_k_hat : array
+        predicted covariance matrix of the current state
+    H :  array
+        Transition matrix of the measurement model
+    y_k :  array
+        Measured state
+    R_k :  array
+        Covariance matrix of the current measurement
+    
+    Returns
+    -------
+    m_k : array
+        Filtered current state
+    P_k : array
+        Filtered covariance matrix
+    '''
     v_k = y_k - np.dot(H ,m_k_hat)
     S_k = np.dot(np.dot(H,P_k_hat), H.transpose() ) + R_k
     K_k = np.dot(np.dot(P_k_hat,H.transpose()),np.linalg.inv(S_k))
@@ -188,8 +263,23 @@ def KalmanFilter(m_k_hat, P_k_hat, H, y_k, R_k):
     return m_k , P_k
 
 def KFImplementationCTCRW(data,beta,sigma, xcolname = 'X', ycolname = 'Y', tcolname = 'DATETIME',errorcol = 'HPE'):
-    ''' Optional inputs 'colnam' contain strings with the names of the colums where the x position, 
-    y position and transmission time can be found.
+    '''
+    Implementation of the whole iterative Kalman filtering algorithm,
+    Using the CTCRW movement model
+    
+    Parameters
+    ----------
+    data : DataFrame
+        Dataset that requires filtering
+    beta,sigma : float
+        Paramaters required by the CTCRW model, either estimated or known
+    Returns
+    -------
+    data_out : DataFrame
+        Filtered dataset
+    m_k_vector,P_k_vector: array
+        Contains all filtered states and covariance matrices respectfully. 
+        Required by the RTSS algorithm.
     '''
     data_out = data.copy()
     # first point can't be filtered: copy from original
@@ -226,15 +316,47 @@ def KFImplementationCTCRW(data,beta,sigma, xcolname = 'X', ycolname = 'Y', tcoln
     return data_out, m_k_vector,P_k_vector
 
 def max_swimming_speed(ID,length_data):
+    '''
+    Returns the maximum swimming speed found in literature, based on the species and its known length.
+    
+    Parameters
+    ----------
+    ID : string
+        ID of the fish
+    length_data : DataFrame
+        Contains all known lengths of the tagged fish
+        
+    Returns
+    -------
+    max_speed : float
+        Maximum swimming speed according to literature
+    '''
     ID = np.int(ID)
     body_length = length_data.Length_mm[length_data.ID == ID].item()/1000   #mm to m
+    # eels
     if (ID >= 100 & ID <= 109)|(ID >= 38725 & ID <=38740):
         max_speed = body_length * 7.5  
+    # salmon
     else:     
         max_speed = body_length *8
     return max_speed
 
 def plot_fish_tracks(ID,path,hydro,wall_data, pas_nr = 'All'): 
+    '''
+    Plots the results of Kalman filterin, YAPS, and a combination of both
+    
+    Parameters
+    ----------
+    ID : string
+        ID of the fish
+    hydro : DataFrame
+        Positions of the stationary receivers
+    wall_data : Dataframe
+        Outline of the canal walls
+    pas_nr : int of 'All', optional
+        If an integer is passed, the selected passing is plotted
+        If no value is passed, all calculated tracks of this fish are plotted 
+    '''
     ID = str(ID)
     plt.rcParams.update({'font.size': 14})
     fish_data = pd.read_csv(''.join((path,'Example_data/VPS_track_cleaned_',ID,'.csv')))
@@ -332,11 +454,25 @@ def prepare_tag_data(input_data,pas_tol = 2):
     end_data['synced_time']= synced_time.values
     return end_data
 
-def RTSSImplementationCTCRW(data,m_k_vector,P_k_vector,beta,sigma, tcolname = 'DATETIME'):
-    '''Requires a run of the regular KF implementation algortihm first. 
+def RTSSImplementationCTCRW(data,m_k_vector,P_k_vector,beta,sigma, tcolname = 'DATETIME'):  
+    '''
+    Implementation of the whole iterative RTSS algorithm.
+    Requires a run of the regular KF implementation algortihm first. 
     The output of that function can then serve as the input of this one.
     
-    '''    
+    Parameters
+    ----------
+    data : DataFrame
+        Filtered dataset that requires smoothing
+    m_k_vector,P_k_vector: array
+        Contains all filtered states and covariance matrices respectfully. 
+    beta,sigma : float
+        Paramaters required by the CTCRW model, either estimated or known
+    Returns
+    -------
+    data_out : DataFrame
+        Smoothed dataset
+    '''
     data_out = data.copy()
     #last filtered point can't be smoothed: copy
     data_out.loc[len(data)-1, 'X_smoothed'] = data.loc[len(data)-1, 'X_filtered']
@@ -361,6 +497,33 @@ def RTSSImplementationCTCRW(data,m_k_vector,P_k_vector,beta,sigma, tcolname = 'D
     return data_out
 
 def RTSSmoother(m_k, m_k_hat_next, m_k_s_next, P_k, P_k_hat_next, P_k_s_next, A_k):
+    '''
+    Implementation of the standard RTSS, using the notation of Sakkra (2013)
+    
+    Parameters
+    ----------
+    m_k : array
+        Filtered current state
+    m_k_hat_,ext : array
+        Predicted next state
+    m_k_s_next : array
+        Smoothed next state
+    P_k : array
+        Filtered covariance matrix of the current state
+    P_k_hat_next : array
+        Predicted covariance matrix of the next state
+    P_k_s_next : array
+        Smoothed covariance matrix of the next state
+    A_k :  array
+        Transition matrix of the process model 
+    
+    Returns
+    -------
+    m_k_s : array
+        Smoothed current state
+    P_k_s : array
+        Smoothed covariance matrix
+    '''
     G_k = np.dot(np.dot(P_k, A_k.transpose()),np.linalg.inv(P_k_hat_next))
     m_k_s = m_k + np.dot(G_k,(m_k_s_next-m_k_hat_next))
     P_k_s = P_k + np.dot(np.dot(G_k,(P_k_s_next-P_k_hat_next)),G_k.transpose())
@@ -373,15 +536,16 @@ def speed_filter(data, max_speed = 'infer', points_used = 2,xcolname = 'X',ycoln
     
     Inputs
     ------
-    data : dataframe 
+    data : DataFrame 
         The dataset that requires cleaning. Must contain at least the columns 'X','Y' and 'DATETIME'
     max_speed : int of str
         If the maximum swimmingspeed for the species is known, give as input. 
-        If not, 'infer' should be given. Then the top 10% speeds are removed
+        If not, 'infer' should be given. Then the top 5% speeds are removed
     
     Returns
     -------
-    cleaned_data : dataframe
+    cleaned_data : DataFrame
+        Cleaned track, where points with high speeds are removed
     '''
     if points_used == 2:
         #calculate swimming speed between steps
@@ -405,18 +569,22 @@ def speed_filter(data, max_speed = 'infer', points_used = 2,xcolname = 'X',ycoln
 
 def split_passings(end_data, min_obs):
     '''
-    Function splits the cleaned TOA data from a fish track into passings of uninterrupted datapoints, usable by YAPS.
+    Function splits the cleaned TOA data from a fish track into different tracks, usable by YAPS.
     
     Inputs
     ------
-    end_data_cleaned: dataframe containing cleaned dataset; interferences removed, but empty rows not yet introduced
-    min_obs: int,minimum observations needed to create a usable track for YAPS
+    end_data_cleaned: DataFrame 
+        Cleaned TOA data
+    min_obs: int,
+        Minimum observations needed to create a usable track for YAPS
     
     Returns
     -------
-    end_data_split: dataframe, containing the different passings split up
-    timestamps: dataframe containing time of first and last observation of each passing. 
-                Used to link the YAPS tracks to VPS and filtered tracks
+    end_data_split: DataFrame
+        TOA matrix ready for usage in YAPS
+    timestamps: DataFrame 
+        Times of first and last observation of each passing. 
+        Used to link the YAPS tracks to VPS and filtered tracks
     '''
     # synced time is used to easiliy access the number of observations per passage
     passings = end_data.synced_time.groupby(level = 0).agg(['count','first','last'])
@@ -468,18 +636,19 @@ def two_stage_speed_filter(data, max_speed = 'infer',points_used = 2,xcolname = 
     '''
     This function will remove positions with unrealisticly high speeds as a form of validation gating before the Kalman Filter.
     The method used is analogous to the one defined by Austin (2003)
+    Internally calls the McConell speed filter as the second stage
     
     Inputs
     ------
-    data : dataframe 
+    data : DataFrame 
         The dataset that requires cleaning. Must contain at least the columns 'X','Y' and 'DATETIME'
     max_speed : int of str
-        If the maximum swimmingspeed for the species is known, give as input. 
+        If the maximum swimming speed for the species is known, give as input. 
         If not, 'infer' should be given. Then the top 10% speeds are removed
     
     Returns
     -------
-    cleaned_data : dataframe
+    cleaned_data : DataFrame
     '''
     # stage one: remove point if all speeds are too high
     if points_used == 2:
