@@ -7,7 +7,7 @@
 This repository provides all code for the implementation of the YAPS-BI algorithm, combined with a Kalman filter/smoother.
 
 The method implemented here uses an altered version of the YAPS algorithm created by Baktoft (2017). 
-This new version, YAPS-BI, uses the known mean of the burst interval and calculated soundspeeds to stabalize performance and speed up the process.
+This new version, YAPS-BI, uses the known mean of the burst interval and calculated soundspeeds to stabilize performance and speed up the process.
 
 Additionally, the resulting YAPS track is filtered with a Kalman Filter and Rauch-Tung-Striebel smoother to reduce the impact of multipath errors further. 
 Our results also show this additional step increases the relevance of the error measure significantly.
