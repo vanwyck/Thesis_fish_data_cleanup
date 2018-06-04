@@ -32,7 +32,11 @@ Type objective_function<Type>::operator() ()
   PARAMETER(log_t_part);		// t-part of mixture model 
   Type t_part = exp(log_t_part);
   Type G_part = Type(1.0) - t_part; //Gaussian part of mixture model
-
+  
+  //PARAMETER(log_miss_part);
+  //Type yes_part = exp(log_miss_part);
+  //Type no_part = Type(1.0) - yes_part;
+  
   
   array<Type> mu_toa(nh,np);  // mu-matrix
   array<Type> dist(nh,np);	// dist-matrix
@@ -68,12 +72,10 @@ Type objective_function<Type>::operator() ()
   
   
   //burst interval component
-  for(int i = 2; i < np; ++i)
+  for(int i = 0; i < np; ++i)
   {
     if(i == 0) {
       nll -= dnorm(top(0),Type(0.0),Type(4.0),true);
-    } else if (i == 1){
-      nll -= dnorm(top(1),Type(2.0),Type(4.0),true);
     } else {
       nll -= dnorm(top(i) - top(i - 1) - mean_BI, Type(0), sigma_bi, true);
     }
