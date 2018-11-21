@@ -193,13 +193,18 @@ def find_delay(ID):
     elif ((ID >= 34429) & (ID <= 34453)):
         min_delay = 40 + 3.2
         max_delay = 80 + 3.2
-    elif ((ID >= 34517 & ID <=34536)|(ID >= 64485 & ID <=64513)|(ID == 53429)):
+    elif ((ID >= 1834) & (ID <=1853)):
+        min_delay = 17 + 3.2
+        max_delay = 33 + 3.2
+    elif (((ID >= 34517) & (ID <=34536))|((ID >= 64485) & (ID <=64513))|(ID == 53429)):
         min_delay = 15 + 3.2
         max_delay = 30 + 3.2
     elif (ID == 16200):
         min_delay = 10+3.2
         max_delay = 10+3.2
     else:
+        min_delay = 10
+        max_delay = 10
         print('Invalid ID')    
     return (min_delay,max_delay)
 
